@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "persistent-memory-chatbot"
+version = "1.0.0"
+description = "Streamlit chatbot with a persistent, cross-session memory of its user"
+requires-python = ">=3.11"
+readme = "README.md"
+dependencies = [
+    "streamlit>=1.40",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    "python-dotenv>=1.0",
+    "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+groq = ["groq>=0.11"]
+gemini = ["google-genai>=1.0"]
+openai = ["openai>=1.40"]
+mem0 = ["mem0ai>=0.1.50", "qdrant-client>=1.9"]
+dev = ["pytest>=8.2", "pytest-cov>=5.0", "ruff>=0.5"]
+
+[project.scripts]
+memcli = "memory_chatbot.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q --strict-markers"
+filterwarnings = ["ignore::DeprecationWarning"]
+
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF", "BLE"]
+ignore = [
+    "E501",    # long lines are caught by the formatter
+    "RUF001",  # curly quotes are intentional in user-facing copy
+    "RUF003",
+    "SIM905",  # the multi-line stopword string is far more readable than a list
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]
+
+[tool.coverage.run]
+source = ["src/memory_chatbot"]
+omit = ["*/ui/*"]

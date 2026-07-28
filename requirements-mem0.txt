@@ -1,0 +1,10 @@
+# Optional extras: enable the Mem0 memory backend (MEMORY_BACKEND=mem0).
+#
+#   pip install -r requirements.txt -r requirements-mem0.txt
+#
+# Mem0 OSS stores vectors locally (Qdrant embedded / Chroma) and its own
+# SQLite history db, so no cloud account is needed.
+-r requirements.txt
+
+mem0ai>=0.1.50
+qdrant-client>=1.9

@@ -1,0 +1,38 @@
+# --- secrets ---
+.env
+.env.*
+!.env.example
+
+# --- persistent memory store (user data, never commit) ---
+data/
+!data/.gitkeep
+
+# --- python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+
+# --- tooling caches ---
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# --- streamlit ---
+.streamlit/secrets.toml
+
+# --- editors / os ---
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db

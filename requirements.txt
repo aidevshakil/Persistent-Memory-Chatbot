@@ -1,0 +1,24 @@
+# ---------------------------------------------------------------------------
+# Persistent Memory Chatbot - runtime dependencies
+# ---------------------------------------------------------------------------
+
+# --- UI ---
+streamlit>=1.40
+
+# --- Config / validation ---
+pydantic>=2.7
+pydantic-settings>=2.3
+python-dotenv>=1.0
+
+# --- LLM providers (install at least one) ---
+groq>=0.11              # default provider: fast + generous free tier
+google-genai>=1.0       # Gemini
+openai>=1.40            # OpenAI (also used for embeddings)
+
+# --- HTTP ---
+httpx>=0.27
+
+# --- Optional: Mem0 managed memory backend -------------------------------
+# The app ships with a self-contained SQLite backend and does NOT require
+# mem0ai to run. Install it to switch MEMORY_BACKEND=mem0.
+#   pip install -r requirements-mem0.txt

@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(PYTHONPATH=__TRACKED_VAR__/src LOG_LEVEL=ERROR python C:/Users/shaki/AppData/Local/Temp/claude/h--AI-DEV-SHAKIL-Spiral-Lab-Persistent-Memory-Chatbot/ee39b2ce-9275-4d63-b943-e13042c293b0/scratchpad/bench.py)",
+      "Bash(PYTHONPATH=__TRACKED_VAR__/src LOG_LEVEL=ERROR python C:/Users/shaki/AppData/Local/Temp/claude/h--AI-DEV-SHAKIL-Spiral-Lab-Persistent-Memory-Chatbot/ee39b2ce-9275-4d63-b943-e13042c293b0/scratchpad/bench2.py)"
+    ]
+  }
+}

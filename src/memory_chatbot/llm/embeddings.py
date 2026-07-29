@@ -143,10 +143,3 @@ def unit_similarity(a: Sequence[float] | None, b: Sequence[float] | None) -> flo
     if not a or not b or len(a) != len(b):
         return 0.0
     return max(0.0, min(1.0, (_dot(a, b) + 1.0) / 2.0))
-
-
-def cosine_similarity(a: Sequence[float] | None, b: Sequence[float] | None) -> float:
-    """Cosine similarity mapped to ``[0, 1]``; ``0.0`` when either side is empty."""
-    if not a or not b or len(a) != len(b):
-        return 0.0
-    return unit_similarity(normalize(a), normalize(b))

@@ -11,7 +11,6 @@ import contextlib
 import json
 import sqlite3
 import threading
-from collections.abc import Sequence
 from pathlib import Path
 
 from memory_chatbot.logging_utils import get_logger
@@ -61,10 +60,6 @@ class ConversationStore:
                     json.dumps(message.used_memory_ids),
                 ),
             )
-
-    def extend(self, user_id: str, messages: Sequence[ChatMessage]) -> None:
-        for message in messages:
-            self.append(user_id, message)
 
     def load(self, user_id: str, *, limit: int = 200) -> list[ChatMessage]:
         """Most recent *limit* messages for *user_id*, oldest first."""

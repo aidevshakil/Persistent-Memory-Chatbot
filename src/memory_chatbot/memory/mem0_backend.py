@@ -28,6 +28,7 @@ from typing import Any
 from memory_chatbot.config import LLMProvider, Settings
 from memory_chatbot.logging_utils import get_logger
 from memory_chatbot.memory.base import HISTORY_LIMIT, BaseMemoryBackend, MemoryBackendError
+from memory_chatbot.memory.extraction import normalise_key
 from memory_chatbot.memory.scoring import build_idf, document_tokens, score, tokenize
 from memory_chatbot.models import (
     MemoryCategory,
@@ -48,13 +49,37 @@ _MEM0_LLM_PROVIDER = {
 #: Upper bound for "give me everything for this user" reads.
 _MAX_FETCH = 1000
 
+#: Local ONNX embedder used when no embedding API key is configured.
+#: Mem0 is vector-first and always needs an embedder, but Groq - the project's
+#: default chat provider - serves no embedding models. Without this, a Groq-only
+#: setup could not use the Mem0 backend at all. 67 MB, no torch, no API key.
+_LOCAL_EMBED_MODEL = "BAAI/bge-small-en-v1.5"
+_LOCAL_EMBED_DIMS = 384
+
+
+#: Keys that mark a dict as a *container* of memories rather than one memory.
+_CONTAINER_KEYS = ("results", "memories", "data")
+
 
 def _iter_results(payload: Any) -> Iterator[dict[str, Any]]:
-    """Yield memory dicts from any Mem0 response shape (list or ``{"results": …}``)."""
+    """Yield memory dicts from any Mem0 response shape.
+
+    Mem0 answers in three shapes and all three reach here: ``{"results": [...]}``
+    from ``get_all``/``search``, a plain list from older versions, and - crucially -
+    a *bare* memory dict from ``Memory.get``, which carries ``id``/``memory`` at the
+    top level with no container key. Treating that bare dict as a container yielded
+    nothing, so every ``get`` returned ``None`` and every update failed.
+    """
     if payload is None:
         return
     if isinstance(payload, dict):
-        payload = payload.get("results", payload.get("memories", payload.get("data", [])))
+        if any(key in payload for key in _CONTAINER_KEYS):
+            payload = next(
+                (payload[key] for key in _CONTAINER_KEYS if key in payload),
+                [],
+            )
+        else:
+            payload = [payload]
     if isinstance(payload, dict):
         payload = [payload]
     for item in payload or []:
@@ -91,8 +116,9 @@ class Mem0MemoryBackend(BaseMemoryBackend):
         except Exception as exc:
             raise MemoryBackendError(
                 f"Could not initialise Mem0: {exc}. Mem0 needs an embedding "
-                "provider - set OPENAI_API_KEY or GOOGLE_API_KEY, or use "
-                "MEMORY_BACKEND=sqlite."
+                "provider: set OPENAI_API_KEY or GOOGLE_API_KEY for a hosted one, "
+                "or install the key-free local embedder with "
+                "`pip install -r requirements-mem0.txt`. Or use MEMORY_BACKEND=sqlite."
             ) from exc
         logger.info("Mem0 backend ready at %s", self.root)
 
@@ -104,6 +130,7 @@ class Mem0MemoryBackend(BaseMemoryBackend):
         if provider not in _MEM0_LLM_PROVIDER:
             provider = LLMProvider.OPENAI
 
+        embedder, dims = self._embedder_config()
         config: dict[str, Any] = {
             "vector_store": {
                 "provider": "qdrant",
@@ -111,8 +138,12 @@ class Mem0MemoryBackend(BaseMemoryBackend):
                     "collection_name": "memory_chatbot",
                     "path": str(self.root / "qdrant"),
                     "on_disk": True,
+                    # Qdrant sizes the collection up front and Mem0 defaults this
+                    # to 1536, which silently mismatches every other embedder.
+                    "embedding_model_dims": dims,
                 },
             },
+            "embedder": embedder,
             "history_db_path": str(self.root / "history.db"),
         }
         if api_key := settings.api_key_for(provider):
@@ -124,24 +155,36 @@ class Mem0MemoryBackend(BaseMemoryBackend):
                     "api_key": api_key,
                 },
             }
-        # Mem0 always needs an embedder; only OpenAI/Gemini keys can serve one.
+        return config
+
+    def _embedder_config(self) -> tuple[dict[str, Any], int]:
+        """Choose an embedder and report its vector width.
+
+        A hosted embedder is preferred when its key is present, because the
+        vectors are better. Otherwise we embed locally rather than refusing to
+        start - see :data:`_LOCAL_EMBED_MODEL`.
+        """
+        settings = self.settings
         if settings.openai_api_key:
-            config["embedder"] = {
+            return {
                 "provider": "openai",
                 "config": {
                     "model": "text-embedding-3-small",
                     "api_key": settings.openai_api_key.get_secret_value(),
                 },
-            }
-        elif settings.google_api_key:
-            config["embedder"] = {
+            }, 1536
+        if settings.google_api_key:
+            return {
                 "provider": "gemini",
                 "config": {
                     "model": "models/text-embedding-004",
                     "api_key": settings.google_api_key.get_secret_value(),
                 },
-            }
-        return config
+            }, 768
+        return {
+            "provider": "fastembed",
+            "config": {"model": _LOCAL_EMBED_MODEL},
+        }, _LOCAL_EMBED_DIMS
 
     # -------------------------------------------------------- version shims
     def _call_get_all(self, user_id: str) -> Any:
@@ -160,8 +203,21 @@ class Mem0MemoryBackend(BaseMemoryBackend):
         except (TypeError, ValueError):
             return self._memory.search(query, user_id=user_id, limit=limit)
 
-    def _call_update(self, memory_id: str, text: str) -> Any:
-        """``update`` across Mem0 versions (``text=`` in 2.x, ``data=`` before)."""
+    def _call_update(
+        self, memory_id: str, text: str, metadata: dict[str, Any] | None = None
+    ) -> Any:
+        """``update`` across Mem0 versions (``text=`` in 2.x, ``data=`` before).
+
+        The metadata must travel with the text. Rewriting only the text left our
+        structured mirror of the fact (value, importance, history, timestamps)
+        pinned at its original version, and :meth:`_to_record` reads that mirror -
+        so ``25 -> 26`` was written but always read back as ``25``.
+        """
+        try:
+            return self._memory.update(memory_id=memory_id, text=text, metadata=metadata)
+        except TypeError:
+            pass
+        # Older signatures accept neither `text=` nor `metadata=`.
         try:
             return self._memory.update(memory_id=memory_id, text=text)
         except TypeError:
@@ -213,7 +269,7 @@ class Mem0MemoryBackend(BaseMemoryBackend):
         current.source_message = source_message or current.source_message
         current.updated_at = utc_now()
         try:
-            self._call_update(record_id, current.as_sentence())
+            self._call_update(record_id, current.as_sentence(), self._metadata(current))
         except Exception as exc:
             raise MemoryBackendError(f"Mem0 update failed: {exc}") from exc
         self._cache.pop(current.user_id, None)
@@ -346,14 +402,18 @@ class Mem0MemoryBackend(BaseMemoryBackend):
         text = str(item.get("memory") or item.get("text") or metadata.get("value") or "")
         key = metadata.get("key")
         value = metadata.get("value")
-        if not key or not value:
-            head, _, tail = text.partition(":")
-            if tail:
-                key = key or head.strip().replace(" ", "_").lower()
-                value = value or tail.strip()
-            else:
-                key = key or "note"
-                value = value or text
+
+        head, separator, tail = text.partition(":")
+        if separator and tail.strip():
+            parsed_key, parsed_value = normalise_key(head), tail.strip()
+            if not key:
+                key = parsed_key
+            # The text is the one field every Mem0 version rewrites on update, so
+            # when it names the same slot it is the fresher of the two sources.
+            if normalise_key(key) == parsed_key:
+                value = parsed_value
+        key = key or "note"
+        value = value or text
         return MemoryRecord.from_dict(
             {
                 "id": str(item.get("id") or ""),

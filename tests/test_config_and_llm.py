@@ -15,7 +15,7 @@ from memory_chatbot.config import (
 )
 from memory_chatbot.llm.base import LLMError
 from memory_chatbot.llm.connector import LLMConnector, build_llm_client
-from memory_chatbot.llm.embeddings import NullEmbedder, cosine_similarity
+from memory_chatbot.llm.embeddings import NullEmbedder, unit_similarity
 from memory_chatbot.llm.providers import EchoClient
 from memory_chatbot.models import (
     ChatMessage,
@@ -178,16 +178,16 @@ class TestEmbeddingHelpers:
         assert NullEmbedder().embed_one("anything") is None
 
     def test_identical_vectors_score_one(self) -> None:
-        assert cosine_similarity([1.0, 0.0], [1.0, 0.0]) == pytest.approx(1.0)
+        assert unit_similarity([1.0, 0.0], [1.0, 0.0]) == pytest.approx(1.0)
 
     def test_opposite_vectors_score_zero(self) -> None:
-        assert cosine_similarity([1.0, 0.0], [-1.0, 0.0]) == pytest.approx(0.0)
+        assert unit_similarity([1.0, 0.0], [-1.0, 0.0]) == pytest.approx(0.0)
 
     @pytest.mark.parametrize(
         ("a", "b"), [(None, [1.0]), ([1.0], None), ([], []), ([1.0], [1.0, 2.0])]
     )
     def test_missing_or_mismatched_vectors_score_zero(self, a, b) -> None:
-        assert cosine_similarity(a, b) == 0.0
+        assert unit_similarity(a, b) == 0.0
 
 
 class TestLoggingSetup:

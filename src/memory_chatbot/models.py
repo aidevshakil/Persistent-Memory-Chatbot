@@ -129,8 +129,8 @@ class MemoryRecord:
         label = self.key.replace("_", " ")
         return f"{label}: {self.value}"
 
-    def to_dict(self, *, include_embedding: bool = False) -> dict[str, Any]:
-        payload: dict[str, Any] = {
+    def to_dict(self) -> dict[str, Any]:
+        return {
             "id": self.id,
             "user_id": self.user_id,
             "category": str(self.category),
@@ -142,9 +142,6 @@ class MemoryRecord:
             "source_message": self.source_message,
             "history": list(self.history),
         }
-        if include_embedding:
-            payload["embedding"] = self.embedding
-        return payload
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> Self:

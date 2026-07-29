@@ -8,3 +8,9 @@
 
 mem0ai>=0.1.50
 qdrant-client>=1.9
+
+# Key-free local embedder (ONNX, no torch). Mem0 always needs an embedder, and
+# Groq - the default chat provider - serves none, so without this a Groq-only
+# setup cannot use MEMORY_BACKEND=mem0. Skipped in favour of a hosted embedder
+# whenever OPENAI_API_KEY or GOOGLE_API_KEY is set.
+fastembed>=0.4
